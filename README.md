@@ -1,38 +1,84 @@
 # DmitriCompat - RTX 50 系列兼容层
 
-DmitriRender RTX 50 系列显卡兼容性修复工具。通过 API Hook 方式解决绿屏问题。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
 
-## ⚡ 快速开始
+> 🎯 通过 API Hook 技术解决 DmitriRender 补帧滤镜在 NVIDIA RTX 50 (Blackwell) 系列显卡上的绿屏兼容性问题。
+
+## 📖 项目背景
+
+[DmitriRender](http://www.dmitrirender.ru/) 是一款广受好评的视频插帧滤镜，可将低帧率视频实时补帧至 60fps 或更高。然而，由于该滤镜使用了针对旧版 GPU 架构编译的 CUDA Kernel，在最新的 RTX 50 系列 (Blackwell 架构) 显卡上会出现**绿屏**问题。
+
+本项目通过 **运行时 API Hook** 技术，拦截并修复有问题的 CUDA 调用，使 DmitriRender 能在新显卡上正常工作。
+
+---
+
+## ⚡ 技术方案
+
+```
+┌─────────────────┐     Hook      ┌──────────────────────┐
+│  DmitriRender   │ ──────────▶  │   DmitriCompat.dll   │
+│  (CUDA Kernel)  │              │  - CUDA API Hook     │
+└─────────────────┘              │  - JIT Fallback      │
+                                 │  - Compute Shader    │
+                                 └──────────────────────┘
+```
+
+### 核心修复策略
+
+1. **CUDA Module JIT Fallback** - 当 `cuModuleLoadData` 失败时，自动切换到 PTX JIT 重编译模式
+2. **NULL Kernel Bypass** - 当 CUDA Kernel 函数指针为空时，返回成功避免程序崩溃
+3. **Compute Shader 替代** - 使用 D3D11 Compute Shader 替代失败的 CUDA 色彩转换 Kernel
+
+---
+
+## 🚀 快速开始
 
 ### 1. 构建项目
 
 ```bash
-# Windows (需要 Visual Studio 2019/2022 和 CMake)
+# 使用 Visual Studio
 build.bat
+
+# 或使用 MinGW
+build_smart.bat
 ```
 
 ### 2. 注入到播放器
 
 ```bash
-# 方式 1: 通过进程 PID
+# 启动 PotPlayer 并加载视频后
+python injector.py PotPlayerMini64.exe
+
+# 或通过进程 PID
 python injector.py 12345
 
-# 方式 2: 通过进程名
-python injector.py PotPlayerMini64.exe
+# 自动监控并注入
+python auto_inject_potplayer.py
 ```
 
 ### 3. 查看日志
 
-打开 `build/bin/logs/dmitri_compat.log` 查看 Hook 日志。
+```bash
+# 日志位置
+%APPDATA%\DmitriRender\dmitri_compat\logs\dmitri_compat.log
+
+# 或在构建目录
+build\bin\logs\dmitri_compat.log
+```
 
 ---
 
 ## 📋 系统要求
 
-- Windows 10/11 64 位
-- Visual Studio 2019/2022
-- CMake 3.15+
-- Python 3.7+ (用于注入器)
+| 项目 | 要求 |
+|------|------|
+| 操作系统 | Windows 10/11 64-bit |
+| 编译器 | Visual Studio 2019/2022 或 MinGW-w64 |
+| CMake | 3.15+ |
+| Python | 3.7+ (用于注入工具) |
+| 目标显卡 | NVIDIA RTX 50 系列 (Blackwell) |
 
 ---
 
@@ -41,34 +87,49 @@ python injector.py PotPlayerMini64.exe
 ```
 dmitri_compat/
 ├── src/
-│   ├── main.cpp              # DLL 入口点
-│   ├── logger.cpp            # 日志系统
-│   ├── config.cpp            # 配置加载器
+│   ├── main.cpp                  # DLL 入口点 (基础版)
+│   ├── main_late_hook.cpp        # DLL 入口点 (RTX 50 模式)
+│   ├── logger.cpp                # 日志系统
+│   ├── config.cpp                # 配置加载器
 │   └── hooks/
-│       └── d3d11_hooks.cpp   # D3D11 API Hook 实现
+│       ├── cuda_hook.cpp         # CUDA Driver API Hook (核心)
+│       ├── d3d11_hooks.cpp       # D3D11 API Hook
+│       ├── late_hook.cpp         # 后期设备 Hook
+│       ├── video_processor_hook.cpp  # 视频处理器 Hook
+│       ├── keyed_mutex_hook.cpp  # KeyedMutex Hook
+│       └── compute_shader_replacement.cpp  # Compute Shader 替代
 ├── include/
 │   ├── logger.h
 │   ├── config.h
 │   └── d3d11_hooks.h
 ├── external/
-│   └── minhook/              # MinHook 库
+│   └── minhook/                  # MinHook Hook 库
+├── shaders/
+│   └── nv12_to_bgra.hlsl         # NV12 转 BGRA Compute Shader
 ├── config/
-│   └── config.ini            # 配置文件
-├── build.bat                 # 构建脚本
-├── injector.py               # DLL 注入工具
-└── CMakeLists.txt
+│   └── config.ini                # 配置文件
+├── CMakeLists.txt                # CMake 构建配置
+├── build.bat                     # Windows 构建脚本
+├── injector.py                   # DLL 注入工具
+└── auto_inject_potplayer.py      # PotPlayer 自动注入
 ```
 
 ---
 
 ## ⚙️ 配置选项
 
-编辑 `build/bin/config/config.ini`:
+编辑 `config/config.ini`:
 
 ```ini
 [Fixes]
-# 纹理格式转换 (推荐开启)
-EnableTextureFormatConversion=1
+# CUDA JIT Fallback (RTX 50 核心修复)
+EnableCudaJitFallback=1
+
+# Compute Shader 替代色彩转换
+EnableComputeShaderReplacement=1
+
+# 纹理格式转换 (实验性)
+EnableTextureFormatConversion=0
 
 # 颜色空间校正 (实验性)
 EnableColorSpaceCorrection=0
@@ -77,7 +138,7 @@ EnableColorSpaceCorrection=0
 EnableGPUSync=0
 
 [Debug]
-# 日志级别: 0=None, 1=Error, 2=Info, 3=Verbose
+# 日志级别: 0=Off, 1=Error, 2=Info, 3=Verbose
 LogLevel=2
 
 # 转储纹理 (调试用)
@@ -86,23 +147,24 @@ DumpTextures=0
 
 ---
 
-## 🔍 工作原理
+## 🔍 Hook 的 API
 
-### Hook 的 API
+### CUDA Driver API (RTX 50 核心)
 
-1. **D3D11CreateDevice**
-   - 记录设备创建参数
-   - 检查特性级别
-   - Hook 设备对象的方法
+| API | 功能 |
+|-----|------|
+| `cuModuleLoadData` | 添加 JIT PTX Fallback |
+| `cuModuleLoadDataEx` | 扩展 JIT 选项 |
+| `cuLaunchKernel` | 绕过 NULL 函数指针 |
+| `cuGraphicsD3D11RegisterResource` | 追踪 D3D11 纹理绑定 |
 
-2. **ID3D11Device::CreateTexture2D**
-   - 检测视频格式纹理 (NV12, P010, YUY2)
-   - 记录所有纹理参数
-   - （未来）转换不兼容的格式
+### D3D11 API
 
-3. **IDXGISwapChain::Present**
-   - 监控帧呈现
-   - （未来）添加颜色空间修复
+| API | 功能 |
+|-----|------|
+| `D3D11CreateDevice` | 设备创建监控 |
+| `ID3D11Device::CreateTexture2D` | 视频纹理格式检测 (NV12, P010, YUY2) |
+| `IDXGISwapChain::Present` | 帧呈现监控 |
 
 ### 技术细节
 
@@ -115,18 +177,22 @@ DumpTextures=0
 
 ## 📊 当前状态
 
-### ✅ 已实现 (MVP)
+### ✅ 已实现
 
 - [x] 日志系统
 - [x] 配置文件加载
 - [x] D3D11CreateDevice Hook
 - [x] CreateTexture2D Hook
 - [x] Present Hook
+- [x] CUDA Driver API Hook
+- [x] JIT Fallback 机制
+- [x] NULL Kernel Bypass
 - [x] CMake 构建系统
 - [x] DLL 注入工具
 
 ### 🚧 开发中
 
+- [ ] Compute Shader 色彩转换
 - [ ] 纹理格式自动转换
 - [ ] 颜色空间修复
 - [ ] DXVA2 Hook
@@ -150,8 +216,9 @@ DumpTextures=0
 tail -f build/bin/logs/dmitri_compat.log
 
 # 应该看到类似输出:
-# [2025-11-08 02:00:00.000] [INFO ] ✓ D3D11CreateDevice hooked at ...
-# [2025-11-08 02:00:01.123] [INFO ] === D3D11CreateDevice Called ===
+# [INFO ] ✓ cuModuleLoadData hooked at 0x...
+# [INFO ] 🔥 cuInit #1: flags=0x0
+# [INFO ] ✓ cuInit SUCCESS
 ```
 
 ### 常见问题
@@ -164,32 +231,12 @@ tail -f build/bin/logs/dmitri_compat.log
 2. **没有日志输出**
    - 检查 config.ini 的 LogLevel
    - 确认 logs 目录有写入权限
-   - 验证 DmitriRender 是否真的使用了 D3D11
+   - 验证 DmitriRender 是否真的使用了 D3D11/CUDA
 
 3. **仍然绿屏**
    - 收集日志并提交 Issue
    - 尝试启用不同的修复选项
    - 检查 GPU 驱动版本
-
----
-
-## 🔬 实验性功能
-
-### 启用颜色空间修复
-
-```ini
-[Fixes]
-EnableColorSpaceCorrection=1
-```
-
-### 启用 GPU 同步
-
-```ini
-[Fixes]
-EnableGPUSync=1
-```
-
-**注意**: 实验性功能可能影响性能或稳定性。
 
 ---
 
@@ -220,6 +267,35 @@ python injector.py mpc-hc64.exe
 
 ---
 
+## 📚 版本历史
+
+| 版本 | 日期 | 更新内容 |
+|------|------|----------|
+| v0.4.1 | 2025-12-12 | RTX 50 专用模式，禁用 D3D11 VTable Hook 防崩溃 |
+| v0.4.0 | 2025-12-08 | 添加 Compute Shader 替代方案 |
+| v0.3.0 | 2025-11-28 | CUDA Hook + JIT Fallback |
+| v0.2.0 | 2025-11-15 | 后期 Hook (Late Hook) 技术 |
+| v0.1.0 | 2025-11-08 | MVP - 基础 Hook 框架 |
+
+---
+
+## 📝 技术文档
+
+- [PHASE1_DIAGNOSTIC_REPORT.md](./PHASE1_DIAGNOSTIC_REPORT.md) - DmitriRender DLL 依赖分析报告
+- [PHASE2_SUMMARY.md](./PHASE2_SUMMARY.md) - API Hook 兼容层开发总结
+- [BUILD_SOLUTIONS.md](./BUILD_SOLUTIONS.md) - 构建问题解决方案
+
+---
+
+## ⚠️ 注意事项
+
+1. **RTX 50 专用模式**: 当前版本针对 Blackwell 架构优化，避免使用 D3D11 VTable Hook
+2. **管理员权限**: DLL 注入需要以管理员权限运行
+3. **杀毒软件**: 可能需要将注入工具和 DLL 添加到白名单
+4. **实验性功能**: Compute Shader 替代方案仍在测试中
+
+---
+
 ## 🤝 贡献指南
 
 欢迎提交 Pull Request！
@@ -243,44 +319,31 @@ python injector.py mpc-hc64.exe
 
 ## 📄 许可证
 
-本项目采用 **MIT 许可证**。
+本项目采用 [MIT 许可证](LICENSE)。
 
-### 重要说明
+### 声明
 
 - ✅ 本项目仅通过外部 API Hook 实现兼容性
 - ✅ 不包含任何 DmitriRender 的原始代码
 - ✅ 不涉及反编译或逆向工程
-- ✅ 完全开源，鼓励社区改进
+- ✅ 完全开源，欢迎社区改进
 
 ---
 
 ## 🙏 致谢
 
-- **DmitriRender** - 原始补帧滤镜作者
-- **MinHook** - 优秀的 Hook 库
+- **DmitriRender** - 原始补帧滤镜作者 Dmitri
+- **[MinHook](https://github.com/TsudaKageworthy/minhook)** - 优秀的 Windows Hook 库
 - **社区贡献者** - 测试和反馈
 
 ---
 
 ## 📞 支持
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-- **讨论**: [GitHub Discussions](https://github.com/your-repo/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Akarin-Akari/dmitri_compat/issues)
+- **讨论**: [GitHub Discussions](https://github.com/Akarin-Akari/dmitri_compat/discussions)
 - **文档**: 查看 `PHASE1_DIAGNOSTIC_REPORT.md` 了解技术细节
 
 ---
 
-## 🔄 更新日志
-
-### v0.1.0 (2025-11-08) - MVP
-
-- 实现基础 Hook 框架
-- 支持 D3D11CreateDevice 拦截
-- 支持 CreateTexture2D 监控
-- 支持 Present Hook
-- 详细日志记录
-- 配置文件支持
-
----
-
-**祝你成功复活 DmitriRender！** 🚀
+**Made with ❤️ for the video enthusiast community** 🚀
