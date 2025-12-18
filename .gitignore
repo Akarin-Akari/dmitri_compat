@@ -1,0 +1,55 @@
+# Build artifacts
+build/
+build_32bit/
+*.o
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+
+# Logs
+logs/
+*.log
+*.txt
+!README.txt
+!BUILD_SOLUTIONS.md
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# Debug files
+*.pdb
+*.ilk
+*.exp
+*.idb
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temp
+*.tmp
+*.temp
+nul
