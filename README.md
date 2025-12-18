@@ -1,4 +1,4 @@
-# DmitriCompat - RTX 50 系列兼容层
+# DmitriCompat - RTX 50 系列兼容层（开发中）
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.cppreference.com/w/cpp/17)
@@ -8,9 +8,10 @@
 
 ## 📖 项目背景
 
-[DmitriRender](http://www.dmitrirender.ru/) 是一款广受好评的视频插帧滤镜，可将低帧率视频实时补帧至 60fps 或更高。然而，由于该滤镜使用了针对旧版 GPU 架构编译的 CUDA Kernel，在最新的 RTX 50 系列 (Blackwell 架构) 显卡上会出现**绿屏**问题。
+[DmitriRender](http://www.dmitrirender.ru/) 是一款广受好评的视频插帧滤镜，基于 光流 + 速度预测 + 权重融合 的算法 ，以轻度GPU负载 可将低帧率视频以极低延迟实时补帧至 60fps 或更高屏幕刷新率，并保持相比spv4和RIFE更自然、稳定、无肥皂剧感以及无幻影、闪烁的动态特色。然而，由于该滤镜使用了针对旧版 GPU 架构编译的 CUDA Kernel，在最新的 RTX 50 系列 (Blackwell 架构，似乎，英伟达官方还声称移除了CUDA 及 OpenCL 的32位支持) 显卡上会出现**绿屏**问题。
+初步调查问题可能出在 DmitriRender 的 CUDA kernel 在 RTX 50 系列上无法加载导致无法执行色彩转换和NV12 未转换，导致YUV → RGB失效，画面全绿。这可能与DXVA2 视频处理器在 Blackwell 架构上的变化有关。
 
-本项目通过 **运行时 API Hook** 技术，拦截并修复有问题的 CUDA 调用，使 DmitriRender 能在新显卡上正常工作。
+本项目通过 **运行时 API Hook** 技术，拦截并修复有问题的 CUDA 调用或使用 D3D11 Compute Shader 替代失败的 CUDA 色彩转换 Kernel，不论何种方案，最终使 DmitriRender 能在无驱动修复支持的50系显卡上正常工作。本项目仍在努力尝试开发中，欢迎各路视频编解码硬件大神fork。
 
 ---
 
@@ -347,3 +348,4 @@ python injector.py mpc-hc64.exe
 ---
 
 **Made with ❤️ for the video enthusiast community** 🚀
+
